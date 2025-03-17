@@ -1,0 +1,29 @@
+# Web Scraping
+scrapy>=2.11.0
+selenium>=4.18.1
+beautifulsoup4>=4.12.3
+lxml>=5.1.0
+2captcha-python>=1.5.1
+webdriver-manager>=4.0.1
+
+# Data Processing
+pandas>=2.2.1
+dask>=2024.2.1
+
+# Database
+sqlalchemy>=2.0.27
+mysqlclient>=2.2.4  # MySQL Python connector
+
+# Utilities
+python-dotenv>=1.0.1
+requests>=2.31.0
+fake-useragent>=1.4.0
+tqdm>=4.66.2
+
+# Proxy and Rate Limiting
+scraperapi-sdk>=0.2.2
+
+# CAPTCHA Solving
+pytesseract>=0.3.10
+pillow>=10.2.0
+psutil==7.0.0 
