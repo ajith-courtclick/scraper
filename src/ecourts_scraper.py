@@ -11,6 +11,8 @@ from PIL import Image, ImageEnhance
 from bs4 import BeautifulSoup
 from io import BytesIO
 from selenium.webdriver.common.by import By
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from src.database import Database
 
@@ -21,6 +23,28 @@ class ECourtsScraper:
         self.session = requests.Session()
         self.db = db if db else Database()
         self.app_token = None
+        
+        # Configure retry strategy
+        retry_strategy = Retry(
+            total=5,  # Total number of retries
+            backoff_factor=2,  # Wait 1, 2, 4, 8, 16 seconds between retries
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "POST"]
+        )
+        
+        # Configure adapter with retry strategy
+        adapter = HTTPAdapter(
+            max_retries=retry_strategy,
+            pool_connections=5,
+            pool_maxsize=10
+        )
+        
+        # Mount adapter to both HTTP and HTTPS
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+        
+        # Set default timeouts
+        self.session.timeout = (15, 30)  # (connect timeout, read timeout)
         
         # Initialize components
         self.setup_session()
@@ -42,7 +66,7 @@ class ECourtsScraper:
         for attempt in range(max_retries):
             try:
                 # First get the main page to get cookies and app token
-                response = self.session.get(self.base_url)
+                response = self.session.get(self.base_url, timeout=(15, 30))
                 
                 # Extract app token
                 if 'app_token' in response.text:
@@ -63,7 +87,8 @@ class ECourtsScraper:
                             'Sec-Fetch-Site': 'same-origin',
                             'Sec-Fetch-Mode': 'no-cors',
                             'Sec-Fetch-Dest': 'image',
-                        }
+                        },
+                        timeout=(15, 30)
                     )
                     
                     if captcha_response.status_code == 200 and captcha_response.headers.get('content-type', '').startswith('image/'):
@@ -89,9 +114,21 @@ class ECourtsScraper:
                 else:
                     logging.error("Could not find app token in page")
                 
+            except requests.exceptions.Timeout:
+                logging.error(f"Request timed out (attempt {attempt+1}/{max_retries})")
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                continue
+            except requests.exceptions.ConnectionError:
+                logging.error(f"Connection error (attempt {attempt+1}/{max_retries})")
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                continue
             except Exception as e:
                 logging.error(f"Failed to get app token and CAPTCHA (attempt {attempt+1}/{max_retries}): {str(e)}")
-                time.sleep(1)
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                continue
                 
         return False, None
 
